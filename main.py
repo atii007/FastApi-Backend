@@ -194,6 +194,8 @@ def create_payload(search_index, keyword, min_price=None, max_price=None):
     # Set default values if not provided
     payload["MinPrice"] = min_price if min_price is not None else 500
     payload["MaxPrice"] = max_price if max_price is not None else 200000
+    
+    print(f"[{price_source.upper()} PRICE] payload: {payload}")
 
     return payload
 
