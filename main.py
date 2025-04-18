@@ -169,6 +169,8 @@ class SearchRequest(BaseModel):
     giftStyle: Optional[str] = None
     hobbies: Optional[List[str]] = []
     priceRange: Optional[str] = None
+    minPrice: Optional[int] = None  # Must be in cents
+    maxPrice: Optional[int] = None  # Must be in cents
 def create_payload(search_index,keyword):
     return {
         "Marketplace": "www.amazon.com",
@@ -188,7 +190,7 @@ def create_payload(search_index,keyword):
         "DeliveryFlags": ["FreeShipping"],
         "Condition": "New",
         "MinPrice": 500,
-        "MaxPrice": 6000,
+        "MaxPrice": 200000,
     }
 
 async def make_amazon_api_request(search_index,keyword):
@@ -272,21 +274,24 @@ async def search_items(request_payload: SearchRequest):
             result = await make_amazon_api_request(search_index,keyword)
             if result:
                 print(result)
-                api_response["Items"].append(result['SearchResult']['Items'][0])
+                api_response["Items"].append({
+                    "tag": search_index,
+                    "item": result['SearchResult']['Items'][0]
+                })
     print(api_response)
     try:
         def create_custom_response(api_response):
             items = api_response.get("Items", [])
             custom_items = [
                 {
-                    "redirectURL": item.get("DetailPageURL"),
-                    "imageUrl": item.get("Images", {}).get("Primary", {}).get("Large", {}).get("URL", "No image available"),
-                    "title": item.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "No title available"),
-                    "description": item.get("ItemInfo", {}).get("Features", {}).get("DisplayValues", [""])[0],
-                    "tag": "Technology",
+                    "redirectURL": item_data["item"].get("DetailPageURL"),
+                    "imageUrl": item_data["item"].get("Images", {}).get("Primary", {}).get("Large", {}).get("URL", "No image available"),
+                    "title": item_data["item"].get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "No title available"),
+                    "description": item_data["item"].get("ItemInfo", {}).get("Features", {}).get("DisplayValues", [""])[0],
+                    "tag": item_data.get("tag", "Technology"),  # tag from the outer loop!
                     "color": "#0072C6",
                 }
-                for item in items
+                for item_data in items
             ]
 
             suggestion_list = list(response.keys()) if response else []
