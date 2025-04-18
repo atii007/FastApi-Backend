@@ -194,8 +194,6 @@ def create_payload(search_index, keyword, min_price=None, max_price=None):
     # Set default values if not provided
     payload["MinPrice"] = min_price if min_price is not None else 500
     payload["MaxPrice"] = max_price if max_price is not None else 200000
-    
-    print(f"[{price_source.upper()} PRICE] payload: {payload}")
 
     return payload
 
@@ -271,18 +269,23 @@ async def search_items(request_payload: SearchRequest):
 
     if response is not None:
         for search_index, keyword in response.items():
-            print(f"Calling Amazon API for {search_index} with keyword {keyword}")
-            result = await make_amazon_api_request(
-                search_index,
-                keyword,
-                request_payload.minPrice,
-                request_payload.maxPrice
-            )
+            min_price = request_payload.minPrice or 500
+            max_price = request_payload.maxPrice or 200000
+            price_source = "user" if request_payload.minPrice or request_payload.maxPrice else "default"
+
+            print(f"→ Using {price_source} price | Index: {search_index}, Keyword: {keyword}, Min: {min_price}, Max: {max_price}")
+
+            result = await make_amazon_api_request(search_index, keyword, min_price, max_price)
+
             if result:
-                print(result)
                 api_response["Items"].append({
                     "tag": search_index,
-                    "item": result['SearchResult']['Items'][0]
+                    "item": result['SearchResult']['Items'][0],
+                    "priceInfo": {
+                        "min": min_price,
+                        "max": max_price,
+                        "source": price_source
+                    }
                 })
 
     try:
@@ -296,6 +299,7 @@ async def search_items(request_payload: SearchRequest):
                     "description": item_data["item"].get("ItemInfo", {}).get("Features", {}).get("DisplayValues", [""])[0],
                     "tag": item_data.get("tag", "Technology"),
                     "color": "#0072C6",
+                    "priceUsed": item_data.get("priceInfo", {}),
                 }
                 for item_data in items
             ]
