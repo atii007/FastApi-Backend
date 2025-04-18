@@ -171,7 +171,9 @@ class SearchRequest(BaseModel):
     priceRange: Optional[str] = None
     minPrice: Optional[int] = None  # Must be in cents
     maxPrice: Optional[int] = None  # Must be in cents
-def create_payload(search_index,keyword):
+def create_payload(search_index,keyword,search_request: SearchRequest):
+    min_price = search_request.minPrice if search_request.minPrice is not None else 500
+    max_price = search_request.maxPrice if search_request.maxPrice is not None else 200000
     return {
         "Marketplace": "www.amazon.com",
         "PartnerType": "Associates",
@@ -189,8 +191,8 @@ def create_payload(search_index,keyword):
         "Merchant": "All",
         "DeliveryFlags": ["FreeShipping"],
         "Condition": "New",
-        "MinPrice": 500,
-        "MaxPrice": 200000,
+        "MinPrice": min_price,
+        "MaxPrice": max_price,
     }
 
 async def make_amazon_api_request(search_index,keyword):
