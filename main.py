@@ -171,9 +171,7 @@ class SearchRequest(BaseModel):
     priceRange: Optional[str] = None
     minPrice: Optional[int] = None  # Must be in cents
     maxPrice: Optional[int] = None  # Must be in cents
-def create_payload(search_index,keyword,search_request: SearchRequest):
-    min_price = search_request.minPrice if search_request.minPrice is not None else 500
-    max_price = search_request.maxPrice if search_request.maxPrice is not None else 200000
+def create_payload(search_index,keyword):
     return {
         "Marketplace": "www.amazon.com",
         "PartnerType": "Associates",
@@ -191,11 +189,11 @@ def create_payload(search_index,keyword,search_request: SearchRequest):
         "Merchant": "All",
         "DeliveryFlags": ["FreeShipping"],
         "Condition": "New",
-        "MinPrice": min_price,
-        "MaxPrice": max_price,
+        "MinPrice": 500,
+        "MaxPrice": 200000,
     }
 
-async def make_amazon_api_request(search_index, keyword, search_request: SearchRequest):
+async def make_amazon_api_request(search_index,keyword):
     # Define the constants as before
     access_key_id = os.getenv("ACCESS_KEY_ID")
     secret_access_key = os.getenv("SECRET_ACCESSKEY")
@@ -208,7 +206,7 @@ async def make_amazon_api_request(search_index, keyword, search_request: SearchR
     amz_date = current_date.strftime("%Y%m%dT%H%M%SZ")
     date_stamp = current_date.strftime("%Y%m%d")
 
-    payload = create_payload(search_index, keyword, search_request)
+    payload = create_payload(search_index,keyword)
 
     canonical_request = "\n".join([
         "POST",
