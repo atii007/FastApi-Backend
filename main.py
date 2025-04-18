@@ -195,7 +195,7 @@ def create_payload(search_index,keyword,search_request: SearchRequest):
         "MaxPrice": max_price,
     }
 
-async def make_amazon_api_request(search_index,keyword):
+async def make_amazon_api_request(search_index, keyword, search_request: SearchRequest):
     # Define the constants as before
     access_key_id = os.getenv("ACCESS_KEY_ID")
     secret_access_key = os.getenv("SECRET_ACCESSKEY")
@@ -208,7 +208,7 @@ async def make_amazon_api_request(search_index,keyword):
     amz_date = current_date.strftime("%Y%m%dT%H%M%SZ")
     date_stamp = current_date.strftime("%Y%m%d")
 
-    payload = create_payload(search_index,keyword)
+    payload = create_payload(search_index, keyword, search_request)
 
     canonical_request = "\n".join([
         "POST",
