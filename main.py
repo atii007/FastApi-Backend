@@ -171,13 +171,13 @@ class SearchRequest(BaseModel):
     priceRange: Optional[str] = None
     minPrice: Optional[int] = None  # Must be in cents
     maxPrice: Optional[int] = None  # Must be in cents
-def create_payload(search_index,keyword):
-    return {
+def create_payload(search_index, keyword, min_price=None, max_price=None):
+    payload = {
         "Marketplace": "www.amazon.com",
         "PartnerType": "Associates",
         "PartnerTag": "yourgiftwish-20",
-        "Keywords": keyword,  # Assuming final_response is already defined
-        "SearchIndex": search_index,  # Set the correct search index for each call
+        "Keywords": keyword,
+        "SearchIndex": search_index,
         "ItemCount": 1,
         "ItemPage": 1,
         "Resources": [
@@ -189,12 +189,15 @@ def create_payload(search_index,keyword):
         "Merchant": "All",
         "DeliveryFlags": ["FreeShipping"],
         "Condition": "New",
-        "MinPrice": 500,
-        "MaxPrice": 200000,
     }
 
-async def make_amazon_api_request(search_index,keyword):
-    # Define the constants as before
+    # Set default values if not provided
+    payload["MinPrice"] = min_price if min_price is not None else 500
+    payload["MaxPrice"] = max_price if max_price is not None else 200000
+
+    return payload
+
+async def make_amazon_api_request(search_index, keyword, min_price=None, max_price=None):
     access_key_id = os.getenv("ACCESS_KEY_ID")
     secret_access_key = os.getenv("SECRET_ACCESSKEY")
     region = os.getenv("REGION")
@@ -206,7 +209,7 @@ async def make_amazon_api_request(search_index,keyword):
     amz_date = current_date.strftime("%Y%m%dT%H%M%SZ")
     date_stamp = current_date.strftime("%Y%m%d")
 
-    payload = create_payload(search_index,keyword)
+    payload = create_payload(search_index, keyword, min_price, max_price)
 
     canonical_request = "\n".join([
         "POST",
@@ -217,7 +220,6 @@ async def make_amazon_api_request(search_index,keyword):
         hashlib.sha256(json.dumps(payload).encode("utf-8")).hexdigest(),
     ])
 
-    # Create String to Sign
     algorithm = "AWS4-HMAC-SHA256"
     credential_scope = f"{date_stamp}/{region}/{service}/aws4_request"
     string_to_sign = "\n".join([
@@ -227,11 +229,9 @@ async def make_amazon_api_request(search_index,keyword):
         hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
     ])
 
-    # Calculate Signature
     signing_key = get_signature_key(secret_access_key, date_stamp, region, service)
     signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
 
-    # Create Authorization Header
     authorization_header = (
         f"{algorithm} Credential={access_key_id}/{credential_scope}, "
         f"SignedHeaders=content-encoding;host;x-amz-date;x-amz-target, "
@@ -248,19 +248,17 @@ async def make_amazon_api_request(search_index,keyword):
         "Authorization": authorization_header,
     }
 
-    # Make the API Request
     try:
         response = requests.post(endpoint, headers=headers, json=payload)
         if response.status_code == 400:
-            return await make_amazon_api_request("All", keyword)
+            return await make_amazon_api_request("All", keyword, min_price, max_price)
         if response.status_code == 429 or response.status_code == 401:
             error = response.json()
             raise HTTPException(status_code=response.status_code, detail=error["Errors"][0]["Message"])
-        return response.json()  # Return the JSON response
+        return response.json()
     except requests.exceptions.RequestException as e:
         print(f"Request failed for {search_index}: {e}")
-        return await make_amazon_api_request("All", keyword)
-    
+        return await make_amazon_api_request("All", keyword, min_price, max_price)
   
 @app.post("/call-external-api")
 async def search_items(request_payload: SearchRequest):
@@ -268,17 +266,23 @@ async def search_items(request_payload: SearchRequest):
     response = extract_search_indexes(response)
     print(response)
     api_response = {"Items": []}
+
     if response is not None:
-        for search_index,keyword in response.items():
-            print(search_index,keyword)
-            result = await make_amazon_api_request(search_index,keyword)
+        for search_index, keyword in response.items():
+            print(f"Calling Amazon API for {search_index} with keyword {keyword}")
+            result = await make_amazon_api_request(
+                search_index,
+                keyword,
+                request_payload.minPrice,
+                request_payload.maxPrice
+            )
             if result:
                 print(result)
                 api_response["Items"].append({
                     "tag": search_index,
                     "item": result['SearchResult']['Items'][0]
                 })
-    print(api_response)
+
     try:
         def create_custom_response(api_response):
             items = api_response.get("Items", [])
@@ -288,7 +292,7 @@ async def search_items(request_payload: SearchRequest):
                     "imageUrl": item_data["item"].get("Images", {}).get("Primary", {}).get("Large", {}).get("URL", "No image available"),
                     "title": item_data["item"].get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "No title available"),
                     "description": item_data["item"].get("ItemInfo", {}).get("Features", {}).get("DisplayValues", [""])[0],
-                    "tag": item_data.get("tag", "Technology"),  # tag from the outer loop!
+                    "tag": item_data.get("tag", "Technology"),
                     "color": "#0072C6",
                 }
                 for item_data in items
