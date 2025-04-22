@@ -178,7 +178,7 @@ def create_payload(search_index, keyword, min_price=None, max_price=None):
         "PartnerTag": "yourgiftwish-20",
         "Keywords": keyword,
         "SearchIndex": search_index,
-        "ItemCount": 1,
+        "ItemCount": 5,
         "ItemPage": 1,
         "Resources": [
             "Images.Primary.Large",
@@ -277,16 +277,17 @@ async def search_items(request_payload: SearchRequest):
 
             result = await make_amazon_api_request(search_index, keyword, min_price, max_price)
 
-            if result:
-                api_response["Items"].append({
-                    "tag": search_index,
-                    "item": result['SearchResult']['Items'][0],
-                    "priceInfo": {
-                        "min": min_price,
-                        "max": max_price,
-                        "source": price_source
-                    }
-                })
+            if result and "SearchResult" in result and "Items" in result["SearchResult"]:
+                for item in result["SearchResult"]["Items"]:
+                    api_response["Items"].append({
+                        "tag": search_index,
+                        "item": item,
+                        "priceInfo": {
+                            "min": min_price,
+                            "max": max_price,
+                            "source": price_source
+                        }
+                    })
 
     try:
         def create_custom_response(api_response):
