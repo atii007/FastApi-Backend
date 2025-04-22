@@ -178,7 +178,7 @@ def create_payload(search_index, keyword, min_price=None, max_price=None):
         "PartnerTag": "yourgiftwish-20",
         "Keywords": keyword,
         "SearchIndex": search_index,
-        "ItemCount": 5,
+        "ItemCount": 3,
         "ItemPage": 1,
         "Resources": [
             "Images.Primary.Large",
