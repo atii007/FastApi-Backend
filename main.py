@@ -87,12 +87,13 @@ Final Answer: The key-value pairs of valid Search Indexes and keywords
 Important Note: The following search indexes should not be used in your response: {excluded_indexes}
 """),
 
-        ("human","""
+        ("human", """
 Begin!
 
 Event: {event}
 Person: {person}
 Age: {age}
+Gender: {gender}
 Gift Style: {gift_style}
 Hobbies: {hobbies}
 Price Range: {price_range}
@@ -130,18 +131,18 @@ Output Format:
     # Test the agent with sample queries
     response = agent_executor.invoke({
         "keywords": request_payload.keywords if request_payload.keywords else "",
-       "excluded_indexes": (", ").join(request_payload.suggestion) if request_payload.suggestion else "",
-       "event":request_payload.event,
-       "person":request_payload.person,
-       "age":request_payload.age,
-       "gift_category":request_payload.giftCategory,
-       "gift_style":request_payload.giftStyle,
-       "hobbies": (", ").join(request_payload.hobbies) if request_payload.hobbies else "",
-       "price_range":request_payload.priceRange,
-       "gift_style": "",
-       "tools": tools,
-       "tool_names": [tool.name for tool in tools],
-       "agent_scratchpad": ""  # Provide an empty initial value for agent_scratchpad
+        "excluded_indexes": (", ").join(request_payload.suggestion) if request_payload.suggestion else "",
+        "event": request_payload.event,
+        "person": request_payload.person,
+        "age": request_payload.age,
+        "gift_category": request_payload.giftCategory,
+        "gift_style": request_payload.giftStyle,
+        "hobbies": (", ").join(request_payload.hobbies) if request_payload.hobbies else "",
+        "price_range": request_payload.priceRange,
+        "tools": tools,
+        "tool_names": [tool.name for tool in tools],
+        "agent_scratchpad": "",
+        "gender": request_payload.gender if request_payload.gender else "",  # <-- ADD THIS
     })
     #   response = llm.invoke(prompt)
     return response["output"]  # Split the response into a list of keywords
@@ -171,6 +172,7 @@ class SearchRequest(BaseModel):
     priceRange: Optional[str] = None
     minPrice: Optional[int] = None  # Must be in cents
     maxPrice: Optional[int] = None  # Must be in cents
+    gender: Optional[str] = None
 def create_payload(search_index, keyword, min_price=None, max_price=None):
     payload = {
         "Marketplace": "www.amazon.com",
@@ -260,8 +262,28 @@ async def make_amazon_api_request(search_index, keyword, min_price=None, max_pri
         print(f"Request failed for {search_index}: {e}")
         return await make_amazon_api_request("All", keyword, min_price, max_price)
   
+# Helper function to infer gender based on 'person'
+def infer_gender(person: str) -> Optional[str]:
+    person = person.lower()
+    female_terms = ["mother", "daughter", "girlfriend", "female"]
+    male_terms = ["father", "son", "boyfriend", "male"]
+
+    if person in female_terms:
+        return "female"
+    elif person in male_terms:
+        return "male"
+    else:
+        return None  # Cannot infer
+
+# Update the search_items function
 @app.post("/call-external-api")
 async def search_items(request_payload: SearchRequest):
+    # Infer gender if not provided
+    if not request_payload.gender:
+        inferred_gender = infer_gender(request_payload.person)
+        if inferred_gender:
+            request_payload.gender = inferred_gender
+
     response = generate_keywords_with_langchain(request_payload)
     response = extract_search_indexes(response)
     print(response)
@@ -269,13 +291,16 @@ async def search_items(request_payload: SearchRequest):
 
     if response is not None:
         for search_index, keyword in response.items():
+            # Include gender in the keyword if provided
+            final_keyword = f"{request_payload.gender} {keyword}" if request_payload.gender else keyword
+
             min_price = request_payload.minPrice or 500
             max_price = request_payload.maxPrice or 200000
             price_source = "user" if request_payload.minPrice or request_payload.maxPrice else "default"
 
-            print(f"→ Using {price_source} price | Index: {search_index}, Keyword: {keyword}, Min: {min_price}, Max: {max_price}")
+            print(f"→ Using {price_source} price | Index: {search_index}, Keyword: {final_keyword}, Min: {min_price}, Max: {max_price}")
 
-            result = await make_amazon_api_request(search_index, keyword, min_price, max_price)
+            result = await make_amazon_api_request(search_index, final_keyword, min_price, max_price)
 
             if result and "SearchResult" in result and "Items" in result["SearchResult"]:
                 for item in result["SearchResult"]["Items"]:
