@@ -15,11 +15,18 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import BaseTool
+from mangum import Mangum
 # Load environment variables from .env file
 from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello from Lambda!"}
+
+handler = Mangum(app)
 
 # Allow CORS for all origins
 app.add_middleware(
